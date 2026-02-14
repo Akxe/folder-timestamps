@@ -9,6 +9,8 @@ interface FolderStats {
 	path: string;
 	latestCreated: Date | null;
 	latestModified: Date | null;
+	fileCount: number;
+	cumulativeFileCount: number;
 }
 
 /**
@@ -39,10 +41,11 @@ EXAMPLES:
 	folder-timestamps C:\\Users\\Documents
 
 OUTPUT FORMAT:
-	Displays a table with three columns:
-	- Folder Path
+	Displays a table with four columns:
+	- Folder Path (shown as (root)/subdirectory)
 	- Latest Created (last file creation date in folder)
 	- Latest Modified (last file modification date in folder)
+	- Files (format: current (total) - files in folder and cumulative count)
 
 NOTES:
 	- Requires read permissions for the target directory
@@ -52,6 +55,30 @@ NOTES:
 
 VERSION: 1.0.0
 `);
+}
+
+/**
+ * Normalizes a path to be absolute with unified slashes
+ * @param path - The path to normalize
+ * @returns Normalized absolute path with unified slashes
+ */
+async function normalizePath(path: string): Promise<string> {
+	try {
+		// Get the absolute path
+		const absolutePath = await Deno.realPath(path);
+		// Normalize slashes based on OS
+		const separator = Deno.build.os === "windows" ? "\\" : "/";
+		return absolutePath.split(/[\\/]/).join(separator);
+	} catch {
+		// If realPath fails, try to make it absolute manually
+		const separator = Deno.build.os === "windows" ? "\\" : "/";
+		let absPath = path;
+		if (!path.match(/^([a-zA-Z]:)?[\\/]/)) {
+			// Relative path, make it absolute
+			absPath = `${Deno.cwd()}${separator}${path}`;
+		}
+		return absPath.split(/[\\/]/).join(separator);
+	}
 }
 
 /**
@@ -102,6 +129,8 @@ async function scanDirectory(
 		path: dirPath,
 		latestCreated: null,
 		latestModified: null,
+		fileCount: 0,
+		cumulativeFileCount: 0,
 	};
 
 	try {
@@ -110,6 +139,10 @@ async function scanDirectory(
 
 			if (entry.isFile) {
 				const fileStats = await getFileStats(fullPath);
+
+				// Increment file count
+				folderStat.fileCount++;
+				folderStat.cumulativeFileCount++;
 
 				// Update latest created date
 				if (
@@ -133,9 +166,12 @@ async function scanDirectory(
 				const subStats = await scanDirectory(fullPath, []);
 				stats.push(...subStats);
 
-				// Update current folder with subdirectory dates
+				// Update current folder with subdirectory dates and file counts
 				for (const subStat of subStats) {
 					if (subStat.path === fullPath) {
+						// Add subdirectory cumulative file count to current folder
+						folderStat.cumulativeFileCount += subStat.cumulativeFileCount;
+
 						if (
 							subStat.latestCreated &&
 							(!folderStat.latestCreated ||
@@ -181,38 +217,72 @@ function formatDate(date: Date | null): string {
 /**
  * Displays the folder statistics in a formatted table
  * @param stats - Array of folder statistics to display
+ * @param rootPath - The root folder path to display before the table
  */
-function displayResults(stats: FolderStats[]): void {
+function displayResults(stats: FolderStats[], rootPath: string): void {
 	if (stats.length === 0) {
 		console.log("No folders found.");
 		return;
 	}
 
-	// Calculate column widths
+	// Determine path separator
+	const separator = Deno.build.os === "windows" ? "\\" : "/";
+	const rootWithSeparator = rootPath.endsWith(separator) ? rootPath : `${rootPath}${separator}`;
+
+	// Calculate column widths (format paths as (root)/subdir)
 	const maxPathLength = Math.max(
-		...stats.map((s) => s.path.length),
+		...stats.map((s) => {
+			if (s.path === rootPath) return "(root)";
+			if (s.path.startsWith(rootWithSeparator)) {
+				const relativePath = s.path.substring(rootWithSeparator.length);
+				return `(root)/${relativePath.replace(/\\/g, "/")}`;
+			}
+			return s.path;
+		}).map(p => p.length),
 		"Folder Path".length
 	);
 	const dateWidth = 12; // YYYY-MM-DD format plus padding
 
-	// Print header
-	console.log("\n┌" + "─".repeat(maxPathLength + 2) + "┬" + "─".repeat(dateWidth + 2) + "┬" + "─".repeat(dateWidth + 2) + "┐");
-	console.log(
-		`│ ${"Folder Path".padEnd(maxPathLength)} │ ${"Created".padEnd(dateWidth)} │ ${"Modified".padEnd(dateWidth)} │`
+	// Calculate file count column width based on actual data
+	const maxFileCountLength = Math.max(
+		...stats.map(s => `${s.fileCount} (${s.cumulativeFileCount})`.length),
+		"Files".length
 	);
-	console.log("├" + "─".repeat(maxPathLength + 2) + "┼" + "─".repeat(dateWidth + 2) + "┼" + "─".repeat(dateWidth + 2) + "┤");
+	const fileCountWidth = maxFileCountLength;
+
+	// Print header
+	console.log("\n┌" + "─".repeat(maxPathLength + 2) + "┬" + "─".repeat(dateWidth + 2) + "┬" + "─".repeat(dateWidth + 2) + "┬" + "─".repeat(fileCountWidth + 2) + "┐");
+	console.log(
+		`│ ${"Folder Path".padEnd(maxPathLength)} │ ${"Created".padEnd(dateWidth)} │ ${"Modified".padEnd(dateWidth)} │ ${"Files".padEnd(fileCountWidth)} │`
+	);
+	console.log("├" + "─".repeat(maxPathLength + 2) + "┼" + "─".repeat(dateWidth + 2) + "┼" + "─".repeat(dateWidth + 2) + "┼" + "─".repeat(fileCountWidth + 2) + "┤");
 
 	// Print rows
 	for (const stat of stats) {
-		const path = stat.path.padEnd(maxPathLength);
+		// Display "(root)" for the root folder, otherwise show (root)/relative/path
+		let displayPath: string;
+		if (stat.path === rootPath) {
+			displayPath = "(root)";
+		} else if (stat.path.startsWith(rootWithSeparator)) {
+			const relativePath = stat.path.substring(rootWithSeparator.length);
+			// Normalize slashes to forward slashes for display
+			displayPath = `(root)/${relativePath.replace(/\\/g, "/")}`;
+		} else {
+			displayPath = stat.path;
+		}
+		const path = displayPath.padEnd(maxPathLength);
 		const created = formatDate(stat.latestCreated).padEnd(dateWidth);
 		const modified = formatDate(stat.latestModified).padEnd(dateWidth);
-		console.log(`│ ${path} │ ${created} │ ${modified} │`);
+		const files = `${stat.fileCount} (${stat.cumulativeFileCount})`.padEnd(fileCountWidth);
+		console.log(`│ ${path} │ ${created} │ ${modified} │ ${files} │`);
 	}
 
 	// Print footer
-	console.log("└" + "─".repeat(maxPathLength + 2) + "┴" + "─".repeat(dateWidth + 2) + "┴" + "─".repeat(dateWidth + 2) + "┘");
-	console.log(`\nTotal folders analyzed: ${stats.length}\n`);
+	console.log("└" + "─".repeat(maxPathLength + 2) + "┴" + "─".repeat(dateWidth + 2) + "┴" + "─".repeat(dateWidth + 2) + "┴" + "─".repeat(fileCountWidth + 2) + "┘");
+
+	const totalFiles = stats[0]?.cumulativeFileCount || 0;
+	console.log(`\nTotal folders analyzed: ${stats.length}`);
+	console.log(`Total files: ${totalFiles}\n`);
 }
 
 /**
@@ -240,13 +310,16 @@ async function main(): Promise<void> {
 		Deno.exit(1);
 	}
 
-	console.log(`\n📂 Analyzing folder: ${targetPath}\n`);
+	// Normalize the path to be absolute with unified slashes
+	const normalizedPath = await normalizePath(targetPath);
+
+	console.log(`\n📂 Analyzing folder: ${normalizedPath}\n`);
 
 	// Scan directory
-	const stats = await scanDirectory(targetPath);
+	const stats = await scanDirectory(normalizedPath);
 
 	// Display results
-	displayResults(stats);
+	displayResults(stats, normalizedPath);
 }
 
 // Run the application
