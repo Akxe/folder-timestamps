@@ -18,43 +18,43 @@ interface FolderStats {
  */
 function printHelp(): void {
 	console.log(`
-┌─────────────────────────────────────────────────────────────────┐
-│           Folder Timestamps Analyzer                            │
-└─────────────────────────────────────────────────────────────────┘
+─────────────────────────────────────────────────────────────────
+            Folder Timestamps Analyzer
+─────────────────────────────────────────────────────────────────
 
 DESCRIPTION:
-	Recursively scans a directory and reports the latest created and
-	modified file timestamps for each folder in the hierarchy.
+    Recursively scans a directory and reports the latest created and
+    modified file timestamps for each folder in the hierarchy.
 
 USAGE:
-	folder-timestamps <directory-path> [options]
+    folder-timestamps <directory-path> [options]
 
 ARGUMENTS:
-	<directory-path>    Path to the root directory to analyze
+    <directory-path>    Path to the root directory to analyze
 
 OPTIONS:
-	--help, -h          Show this help message
-	--include-time, -t  Show full date-time (HH:MM:SS) instead of just date
+    --help, -h          Show this help message
+    --include-time, -t  Show full date-time (HH:MM:SS) instead of just date
 
 EXAMPLES:
-	folder-timestamps /path/to/folder
-	folder-timestamps ./my-project
-	folder-timestamps C:\\Users\\Documents
-	folder-timestamps /path/to/folder --include-time
-	folder-timestamps ./my-project -t
+    folder-timestamps /path/to/folder
+    folder-timestamps ./my-project
+    folder-timestamps C:\\Users\\Documents
+    folder-timestamps /path/to/folder --include-time
+    folder-timestamps ./my-project -t
 
 OUTPUT FORMAT:
-	Displays a table with four columns:
-	- Folder Path (shown as (root)/subdirectory)
-	- Latest Created (last file creation date in folder)
-	- Latest Modified (last file modification date in folder)
-	- Files (format: current (total) - files in folder and cumulative count)
+    Displays a table with four columns:
+    - Folder Path (shown as (root)/subdirectory)
+    - Latest Created (last file creation date in folder)
+    - Latest Modified (last file modification date in folder)
+    - Files (format: current (total) - files in folder and cumulative count)
 
 NOTES:
-	- Requires read permissions for the target directory
-	- Recursively processes all subdirectories
-	- Empty folders show no dates
-	- The root folder shows the latest dates from all its contents
+    - Requires read permissions for the target directory
+    - Recursively processes all subdirectories
+    - Empty folders show no dates
+    - The root folder shows the latest dates from all its contents
 
 VERSION: 1.0.0
 `);
