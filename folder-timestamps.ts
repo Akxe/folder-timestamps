@@ -27,18 +27,21 @@ DESCRIPTION:
 	modified file timestamps for each folder in the hierarchy.
 
 USAGE:
-	folder-timestamps <directory-path>
+	folder-timestamps <directory-path> [options]
 
 ARGUMENTS:
 	<directory-path>    Path to the root directory to analyze
 
 OPTIONS:
 	--help, -h          Show this help message
+	--include-time, -t  Show full date-time (HH:MM:SS) instead of just date
 
 EXAMPLES:
 	folder-timestamps /path/to/folder
 	folder-timestamps ./my-project
 	folder-timestamps C:\\Users\\Documents
+	folder-timestamps /path/to/folder --include-time
+	folder-timestamps ./my-project -t
 
 OUTPUT FORMAT:
 	Displays a table with four columns:
@@ -202,24 +205,34 @@ async function scanDirectory(
 }
 
 /**
- * Formats a date to YYYY-MM-DD format
+ * Formats a date to YYYY-MM-DD or YYYY-MM-DD HH:MM:SS format
  * @param date - Date to format
- * @returns Formatted date string or empty string if date is null
+ * @param includeTime - Whether to include time in the format
+ * @returns Formatted date string or "-" if date is null
  */
-function formatDate(date: Date | null): string {
+function formatDate(date: Date | null, includeTime: boolean = false): string {
 	if (!date) return "-";
 	const year = date.getFullYear();
 	const month = String(date.getMonth() + 1).padStart(2, "0");
 	const day = String(date.getDate()).padStart(2, "0");
-	return `${year}-${month}-${day}`;
+
+	if (!includeTime) {
+		return `${year}-${month}-${day}`;
+	}
+
+	const hours = String(date.getHours()).padStart(2, "0");
+	const minutes = String(date.getMinutes()).padStart(2, "0");
+	const seconds = String(date.getSeconds()).padStart(2, "0");
+	return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 /**
  * Displays the folder statistics in a formatted table
  * @param stats - Array of folder statistics to display
  * @param rootPath - The root folder path to display before the table
+ * @param includeTime - Whether to include time in date display
  */
-function displayResults(stats: FolderStats[], rootPath: string): void {
+function displayResults(stats: FolderStats[], rootPath: string, includeTime: boolean = false): void {
 	if (stats.length === 0) {
 		console.log("No folders found.");
 		return;
@@ -241,7 +254,7 @@ function displayResults(stats: FolderStats[], rootPath: string): void {
 		}).map(p => p.length),
 		"Folder Path".length
 	);
-	const dateWidth = 12; // YYYY-MM-DD format plus padding
+	const dateWidth = includeTime ? 19 : 10; // YYYY-MM-DD HH:MM:SS or YYYY-MM-DD
 
 	// Calculate file count column width based on actual data
 	const maxFileCountLength = Math.max(
@@ -271,8 +284,8 @@ function displayResults(stats: FolderStats[], rootPath: string): void {
 			displayPath = stat.path;
 		}
 		const path = displayPath.padEnd(maxPathLength);
-		const created = formatDate(stat.latestCreated).padEnd(dateWidth);
-		const modified = formatDate(stat.latestModified).padEnd(dateWidth);
+		const created = formatDate(stat.latestCreated, includeTime).padEnd(dateWidth);
+		const modified = formatDate(stat.latestModified, includeTime).padEnd(dateWidth);
 		const files = `${stat.fileCount} (${stat.cumulativeFileCount})`.padEnd(fileCountWidth);
 		console.log(`│ ${path} │ ${created} │ ${modified} │ ${files} │`);
 	}
@@ -301,7 +314,17 @@ async function main(): Promise<void> {
 		Deno.exit(args.length === 0 ? 1 : 0);
 	}
 
-	const targetPath = args[0];
+	// Parse flags
+	const includeTime = args.includes("--include-time") || args.includes("-t");
+
+	// Get the target path (first non-flag argument)
+	const targetPath = args.find(arg => !arg.startsWith("-"));
+
+	if (!targetPath) {
+		console.error("\n❌ Error: No directory path provided.\n");
+		console.log("Use --help for usage information.\n");
+		Deno.exit(1);
+	}
 
 	// Validate directory
 	if (!(await isValidDirectory(targetPath))) {
@@ -319,7 +342,7 @@ async function main(): Promise<void> {
 	const stats = await scanDirectory(normalizedPath);
 
 	// Display results
-	displayResults(stats, normalizedPath);
+	displayResults(stats, normalizedPath, includeTime);
 }
 
 // Run the application
