@@ -1,0 +1,16 @@
+# Compiled executables
+folder-timestamps
+folder-timestamps.exe
+folder-timestamps-linux
+folder-timestamps-*
+
+# Deno
+deno.lock
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store

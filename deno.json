@@ -1,0 +1,13 @@
+{
+	"tasks": {
+		"run": "deno run --allow-read folder-timestamps.ts",
+		"compile": "deno compile --allow-read --output folder-timestamps folder-timestamps.ts",
+		"compile-windows": "deno compile --allow-read --output folder-timestamps.exe folder-timestamps.ts",
+		"compile-all": "deno task compile-windows && deno task compile-linux",
+		"compile-linux": "deno compile --allow-read --target x86_64-unknown-linux-gnu --output folder-timestamps-linux folder-timestamps.ts"
+	},
+	"compilerOptions": {
+		"strict": true,
+		"noImplicitAny": true
+	}
+}
